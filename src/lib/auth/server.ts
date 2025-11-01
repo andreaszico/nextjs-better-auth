@@ -21,7 +21,7 @@ export const auth = betterAuth({
     additionalFields: {
       role: {
         type: "string",
-        defaultValue: "user",
+        defaultValue: "member", // Changed from "user" to "member" to match the schema
         required: false,
         input: false,
       },

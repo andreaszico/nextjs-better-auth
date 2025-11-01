@@ -1,0 +1,1 @@
+ALTER TABLE "modules" ALTER COLUMN "instructor_id" SET DATA TYPE text;

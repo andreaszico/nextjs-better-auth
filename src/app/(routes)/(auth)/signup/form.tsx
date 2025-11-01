@@ -44,7 +44,9 @@ export default function SignUpForm() {
 
       if (response.error) {
         console.log("SIGN_UP:", response.error.status);
-        toast.error(response.error.message);
+        toast.error("Error", {
+          description: response.error.message,
+        });
       } else {
         redirect("/");
       }
