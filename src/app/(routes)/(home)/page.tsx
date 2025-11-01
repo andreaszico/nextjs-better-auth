@@ -59,6 +59,7 @@ export default async function Home() {
           <div className="flex w-full flex-col gap-5">
             <h2>Hi, {me.user.name}</h2>
             <p>{me.user.email}</p>
+            <p>{me.user.role}</p>
             <SignOutButton />
           </div>
         ) : (

@@ -5,7 +5,7 @@ import {
   apiAuthPrefix,
   authRoutes,
   DEFAULT_LOGIN_REDIRECT,
-  publicRoutes,
+  privateRoutes,
 } from "./routes";
 
 export async function proxy(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function proxy(request: NextRequest) {
 
   const isApiAuth = request.nextUrl.pathname.startsWith(apiAuthPrefix);
 
-  const isPublicRoute = publicRoutes.includes(request.nextUrl.pathname);
+  const isPrivateRoute = privateRoutes.includes(request.nextUrl.pathname);
 
   const isAuthRoute = () => {
     return authRoutes.some((path) => request.nextUrl.pathname.startsWith(path));
@@ -32,8 +32,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!session && !isPublicRoute) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  if (!session && isPrivateRoute) {
+    return NextResponse.redirect(new URL("/signin", request.url));
   }
 
   return NextResponse.next();
