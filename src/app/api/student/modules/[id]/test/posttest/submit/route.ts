@@ -1,23 +1,17 @@
 import { NextRequest } from "next/server";
 import { db } from "@/db";
-import { items, modules } from "@/db/schema/modules";
-import { studentProgress } from "@/db/schema/studentProgress";
-import { eq, and, desc } from "drizzle-orm";
+import { items } from "@/db/schema/modules";
+import { eq, and } from "drizzle-orm";
 import { getServerSession } from "@/lib/auth/get-session";
 import { evaluateShortAnswer, evaluateMCQAnswer } from "@/lib/ai-evaluation";
 
 interface AnswerSubmission {
   moduleId: string;
+  level: "easy" | "medium" | "high";
   answers: {
     [questionId: string]: string;
   };
 }
-
-// Define score thresholds for level assignment
-const SCORE_THRESHOLDS = {
-  high: 0.8,    // 80% correct for high level
-  medium: 0.5,  // 50% correct for medium level
-};
 
 export async function POST(
   req: NextRequest,
@@ -34,14 +28,14 @@ export async function POST(
 
     // Get submitted answers
     const body: AnswerSubmission = await req.json();
-    const { answers } = body;
+    const { answers, level } = body;
+    const testType = "posttest"; // This API is specifically for post-test
 
-    // Fetch pretest questions and correct answers for the module
-    const pretestQuestions = await db
+    // Fetch posttest questions for the module and level
+    const posttestQuestions = await db
       .select({
         id: items.id,
         question: items.question,
-        options: items.options,
         questionType: items.questionType,
         answer: items.answer,
         explanation: items.explanation,
@@ -49,21 +43,23 @@ export async function POST(
       .from(items)
       .where(and(
         eq(items.moduleId, moduleId),
-        eq(items.type, "pretest")
+        eq(items.level, level),
+        eq(items.type, testType)
       ));
 
-    if (pretestQuestions.length === 0) {
-      return new Response(JSON.stringify({ error: "No pretest questions available" }), {
+    if (posttestQuestions.length === 0) {
+      return new Response(JSON.stringify({ error: "No posttest questions available" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    // Calculate score based on correct answers
+    // Calculate score based on answers
     let totalScore = 0;
     let totalAnswered = 0;
+    const questionResults = [];
 
-    for (const question of pretestQuestions) {
+    for (const question of posttestQuestions) {
       const submittedAnswer = answers[question.id];
       
       if (submittedAnswer !== undefined && submittedAnswer !== "") {
@@ -75,6 +71,11 @@ export async function POST(
           if (mcqResult.isCorrect) {
             totalScore += 1;
           }
+          questionResults.push({
+            questionId: question.id,
+            isCorrect: mcqResult.isCorrect,
+            feedback: mcqResult.feedback
+          });
         } else if (question.questionType === "short" && question.answer) {
           // For short answer questions, use AI evaluation
           const aiResult = await evaluateShortAnswer(
@@ -83,68 +84,41 @@ export async function POST(
             submittedAnswer
           );
           totalScore += aiResult.score; // Use the score from AI evaluation (0 to 1)
+          questionResults.push({
+            questionId: question.id,
+            isCorrect: aiResult.isCorrect,
+            feedback: aiResult.feedback
+          });
         }
+      } else {
+        // If no answer was submitted, mark as incorrect
+        questionResults.push({
+          questionId: question.id,
+          isCorrect: false,
+          feedback: "No answer provided."
+        });
       }
     }
 
-    // Calculate score percentage
+    // Calculate overall percentage
     const scorePercentage = totalAnswered > 0 ? totalScore / totalAnswered : 0;
-
-    // Determine level based on score
-    let levelAssigned: "easy" | "medium" | "high" = "medium"; // Default to medium
     
-    if (scorePercentage >= SCORE_THRESHOLDS.high) {
-      levelAssigned = "high";
-    } else if (scorePercentage >= SCORE_THRESHOLDS.medium) {
-      levelAssigned = "medium";
-    } else {
-      levelAssigned = "easy";
-    }
-
-    // Check if a progress record already exists for this student and module
-    const existingProgress = await db
-      .select()
-      .from(studentProgress)
-      .where(and(
-        eq(studentProgress.studentId, session.user.id),
-        eq(studentProgress.moduleId, moduleId)
-      ))
-      .orderBy(desc(studentProgress.createdAt))
-      .limit(1);
-
-    if (existingProgress.length > 0) {
-      // Update the existing record
-      await db
-        .update(studentProgress)
-        .set({
-          levelAssigned,
-          pretestScore: JSON.stringify({ score: scorePercentage, totalAnswered, totalScore }),
-          startDate: new Date(),
-          status: "in_progress"
-        })
-        .where(eq(studentProgress.id, existingProgress[0].id));
-    } else {
-      // Create a new progress record
-      await db.insert(studentProgress).values({
-        studentId: session.user.id,
-        moduleId,
-        levelAssigned,
-        pretestScore: JSON.stringify({ score: scorePercentage, totalAnswered, totalScore }),
-        status: "in_progress"
-      });
-    }
+    // Determine pass/fail (50% threshold for passing)
+    const passed = scorePercentage >= 0.5;
 
     return new Response(JSON.stringify({ 
-      levelAssigned,
+      passed,
       score: scorePercentage,
+      totalQuestions: posttestQuestions.length,
+      correctAnswers: Math.round(totalScore), // Approximate correct answers based on score
       totalAnswered,
-      totalScore
+      questionResults
     }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error submitting pretest:", error);
+    console.error("Error submitting posttest:", error);
     return new Response("Internal Server Error", { status: 500 });
   }
 }

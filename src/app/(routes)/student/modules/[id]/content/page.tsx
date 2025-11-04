@@ -65,6 +65,7 @@ export default async function ModuleContent(props: Props) {
       options: items.options,
       answer: items.answer,
       explanation: items.explanation,
+      questionType: items.questionType,
     })
     .from(items)
     .where(and(
@@ -161,30 +162,31 @@ export default async function ModuleContent(props: Props) {
             <CardTitle>Practice Questions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
+            <div className="space-y-8">
               {practiceQuestions.map((question, index) => (
-                <div key={question.id} className="border-b pb-6 last:border-0 last:pb-0">
-                  <h3 className="font-medium text-lg mb-3">Question {index + 1}: {question.question}</h3>
+                <div key={question.id} className="border rounded-lg p-4" id={`question-${question.id}`}>
+                  <div className="flex items-start gap-3 mb-3">
+                    <span className="font-medium bg-blue-100 rounded-full w-8 h-8 flex items-center justify-center flex-shrink-0">
+                      {index + 1}
+                    </span>
+                    <h3 className="font-medium text-lg flex-1">{question.question}</h3>
+                  </div>
                   
-                  {question.options && question.options.length > 0 && (
-                    <div className="ml-4 mb-3 space-y-2">
-                      {question.options.map((option, i) => (
-                        <div key={i} className="flex items-center">
-                          <span className="mr-2 text-gray-500">{String.fromCharCode(65 + i)}.</span>
-                          <span>{option}</span>
-                        </div>
-                      ))}
+                  <div className="mb-4">
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                      <p><span className="font-medium">Explanation:</span> {question.explanation}</p>
                     </div>
-                  )}
-                  
-                  <div className="mt-2 text-sm">
-                    <p><span className="font-medium">Answer:</span> {question.answer}</p>
-                    {question.explanation && (
-                      <p className="mt-1"><span className="font-medium">Explanation:</span> {question.explanation}</p>
-                    )}
                   </div>
                 </div>
               ))}
+            </div>
+            
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <h3 className="text-lg font-semibold mb-2 text-blue-800">Interactive Practice Coming Soon</h3>
+              <p className="text-blue-700">
+                The interactive practice system with AI feedback is being prepared. 
+                For now, please review the explanations provided for each question.
+              </p>
             </div>
           </CardContent>
         </Card>
