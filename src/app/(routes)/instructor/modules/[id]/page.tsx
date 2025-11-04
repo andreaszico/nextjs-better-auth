@@ -9,26 +9,48 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getServerSession } from "@/lib/auth/get-session";
 
 interface Props {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
-export default async function ModuleDetails({ params }: Props) {
+export default async function ModuleDetails(props: Props) {
+  const params = await props.params;
   const session = await getServerSession();
   
   if (!session || session.user.role !== "instructor") {
     redirect("/api/auth/sign-in");
   }
 
+  // Ensure params.id is properly accessed
+  const moduleId = params.id;
+  
+  // Validate the module ID exists
+  if (!moduleId) {
+    redirect("/instructor/modules");
+  }
+
   // Fetch the specific module
   const module = await db
     .select()
     .from(modules)
-    .where(eq(modules.id, params.id))
+    .where(eq(modules.id, moduleId))
     .limit(1);
 
-  if (!module.length || module[0].instructorId !== session.user.id) {
+  console.log("Module query result:", module); // Debug log
+  console.log("Session user ID:", session?.user?.id); // Debug log
+  console.log("Module instructor ID:", module[0]?.instructorId); // Debug log
+
+  if (!module.length) {
+    // Module with this ID doesn't exist
+    console.error(`Module not found with ID: ${moduleId}`);
+    redirect("/instructor/modules");
+  }
+  
+  if (module[0].instructorId !== session.user.id) {
+    // Module belongs to a different instructor
+    console.error(`Module ${moduleId} belongs to different instructor. Access denied.`);
+    console.error(`Expected: ${session.user.id}, Got: ${module[0].instructorId}`);
     redirect("/instructor/modules");
   }
 
@@ -36,12 +58,12 @@ export default async function ModuleDetails({ params }: Props) {
   const contents = await db
     .select()
     .from(moduleContents)
-    .where(eq(moduleContents.moduleId, params.id));
+    .where(eq(moduleContents.moduleId, moduleId)); // Use moduleId instead of params.id
 
   const moduleItems = await db
     .select()
     .from(items)
-    .where(eq(items.moduleId, params.id));
+    .where(eq(items.moduleId, moduleId)); // Use moduleId instead of params.id
 
   // Group questions by type and level
   const groupedItems: Record<string, any[]> = {};
@@ -85,10 +107,41 @@ export default async function ModuleDetails({ params }: Props) {
                   <h3 className="text-lg font-semibold capitalize">{content.level}</h3>
                   <Badge variant="secondary">{content.level}</Badge>
                 </div>
-                <div className="prose max-w-none text-gray-700">
-                  {content.content.split('\n').map((paragraph, i) => (
-                    <p key={i}>{paragraph}</p>
-                  ))}
+                <div className="space-y-4 text-gray-700">
+                  {content.moduleIdentity && (
+                    <div>
+                      <h4 className="font-semibold text-lg">Module Identity</h4>
+                      <p>{content.moduleIdentity}</p>
+                    </div>
+                  )}
+                  {content.introduction && (
+                    <div>
+                      <h4 className="font-semibold text-lg">Introduction</h4>
+                      <p>{content.introduction}</p>
+                    </div>
+                  )}
+                  {content.learningObjectives && content.learningObjectives.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-lg">Learning Objectives</h4>
+                      <ul className="list-disc pl-5 space-y-1">
+                        {content.learningObjectives.map((objective, i) => (
+                          <li key={i}>{objective}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {content.materialExplanation && (
+                    <div>
+                      <h4 className="font-semibold text-lg">Material Explanation / Brief Theory</h4>
+                      <p>{content.materialExplanation}</p>
+                    </div>
+                  )}
+                  {content.summary && (
+                    <div>
+                      <h4 className="font-semibold text-lg">Summary (Temporary Conclusion)</h4>
+                      <p>{content.summary}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
