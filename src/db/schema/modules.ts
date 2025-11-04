@@ -20,7 +20,11 @@ export const moduleContents = pgTable("module_contents", {
     .references(() => modules.id)
     .notNull(),
   level: moduleLevelEnum("level").notNull(),
-  content: text("content").notNull(),
+  moduleIdentity: text("module_identity"),
+  introduction: text("introduction"),
+  learningObjectives: text("learning_objectives").array(),
+  materialExplanation: text("material_explanation"),
+  summary: text("summary"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

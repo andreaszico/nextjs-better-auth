@@ -15,6 +15,13 @@
       "when": 1762012868148,
       "tag": "0001_silly_ultimates",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762225168459,
+      "tag": "0002_clumsy_terrax",
+      "breakpoints": true
     }
   ]
 }
