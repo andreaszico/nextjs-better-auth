@@ -43,14 +43,15 @@ export async function POST(
     let result;
 
     if (questionData.questionType === "mcq") {
-      // For MCQ, use exact match evaluation
-      result = evaluateMCQAnswer(questionData.answer, submittedAnswer);
+      // For MCQ, use exact match evaluation with explanation
+      result = evaluateMCQAnswer(questionData.answer, submittedAnswer, questionData.explanation);
     } else if (questionData.questionType === "short") {
-      // For short answer, use AI evaluation
+      // For short answer, use AI evaluation for scoring, but database explanation as feedback
       result = await evaluateShortAnswer(
         questionData.question,
         questionData.answer,
-        submittedAnswer
+        submittedAnswer,
+        questionData.explanation
       );
     } else {
       return new Response("Invalid question type", { status: 400 });

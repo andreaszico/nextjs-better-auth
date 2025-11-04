@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { db } from "@/db";
 import { items, modules } from "@/db/schema/modules";
 import { studentProgress } from "@/db/schema/studentProgress";
+import { studentTestAttempts, studentAnswers } from "@/db/schema/studentTestAttempts";
 import { eq, and, desc } from "drizzle-orm";
 import { getServerSession } from "@/lib/auth/get-session";
 import { evaluateShortAnswer, evaluateMCQAnswer } from "@/lib/ai-evaluation";
@@ -59,9 +60,12 @@ export async function POST(
       });
     }
 
-    // Calculate score based on correct answers
+    // Calculate score based on answers
     let totalScore = 0;
     let totalAnswered = 0;
+
+    // Array to store question results for saving to DB
+    const questionResults = [];
 
     for (const question of pretestQuestions) {
       const submittedAnswer = answers[question.id];
@@ -70,20 +74,44 @@ export async function POST(
         totalAnswered++;
         
         if (question.questionType === "mcq" && question.answer) {
-          // For MCQ questions, use exact match evaluation
-          const mcqResult = evaluateMCQAnswer(question.answer, submittedAnswer);
+          // For MCQ questions, use exact match evaluation with explanation
+          const mcqResult = evaluateMCQAnswer(question.answer, submittedAnswer, question.explanation);
           if (mcqResult.isCorrect) {
             totalScore += 1;
           }
+          questionResults.push({
+            questionId: question.id,
+            studentAnswer: submittedAnswer,
+            isCorrect: mcqResult.isCorrect,
+            score: mcqResult.isCorrect ? 1 : 0,
+            feedback: mcqResult.feedback
+          });
         } else if (question.questionType === "short" && question.answer) {
-          // For short answer questions, use AI evaluation
+          // For short answer questions, use AI for scoring, but database explanation as feedback
           const aiResult = await evaluateShortAnswer(
             question.question,
             question.answer,
-            submittedAnswer
+            submittedAnswer,
+            question.explanation
           );
           totalScore += aiResult.score; // Use the score from AI evaluation (0 to 1)
+          questionResults.push({
+            questionId: question.id,
+            studentAnswer: submittedAnswer,
+            isCorrect: aiResult.isCorrect,
+            score: aiResult.score,
+            feedback: aiResult.feedback
+          });
         }
+      } else {
+        // If no answer was submitted, mark as incorrect
+        questionResults.push({
+          questionId: question.id,
+          studentAnswer: "",
+          isCorrect: false,
+          score: 0,
+          feedback: "No answer provided."
+        });
       }
     }
 
@@ -131,6 +159,30 @@ export async function POST(
         levelAssigned,
         pretestScore: JSON.stringify({ score: scorePercentage, totalAnswered, totalScore }),
         status: "in_progress"
+      });
+    }
+
+    // Save the pretest attempt to the database
+    const [testAttempt] = await db.insert(studentTestAttempts).values({
+      studentId: session.user.id,
+      moduleId,
+      testType: "pretest",
+      level: levelAssigned,
+      score: scorePercentage.toString(),
+      totalQuestions: pretestQuestions.length.toString(),
+      correctAnswers: Math.round(totalScore).toString(),
+      status: "completed"
+    }).returning({ id: studentTestAttempts.id });
+
+    // Save individual answers to the database
+    for (const result of questionResults) {
+      await db.insert(studentAnswers).values({
+        attemptId: testAttempt.id,
+        questionId: result.questionId,
+        studentAnswer: result.studentAnswer,
+        isCorrect: result.isCorrect ? "true" : "false",
+        score: result.score.toString(),
+        feedback: result.feedback
       });
     }
 

@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { db } from "@/db";
 import { items } from "@/db/schema/modules";
-import { eq } from "drizzle-orm";
+import { studentTestAttempts, studentAnswers } from "@/db/schema/studentTestAttempts";
+import { eq, and, desc } from "drizzle-orm";
 import { getServerSession } from "@/lib/auth/get-session";
 import { evaluateShortAnswer, evaluateMCQAnswer } from "@/lib/ai-evaluation";
 
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { questionId, answer: submittedAnswer, questionType, moduleId } = body;
 
-    // Fetch the question details
+    // Determine the level for this practice question
     const question = await db
       .select({
         id: items.id,
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
         questionType: items.questionType,
         answer: items.answer,
         explanation: items.explanation,
+        level: items.level,
       })
       .from(items)
       .where(eq(items.id, questionId));
@@ -37,20 +39,63 @@ export async function POST(req: NextRequest) {
     let result;
 
     if (questionData.questionType === "mcq") {
-      // For MCQ, use exact match evaluation
-      result = evaluateMCQAnswer(questionData.answer, submittedAnswer);
+      // For MCQ, use exact match evaluation with explanation
+      result = evaluateMCQAnswer(questionData.answer, submittedAnswer, questionData.explanation);
     } else if (questionData.questionType === "short") {
-      // For short answer, use AI evaluation
+      // For short answer, use AI for scoring, but database explanation as feedback
       result = await evaluateShortAnswer(
         questionData.question,
         questionData.answer,
-        submittedAnswer
+        submittedAnswer,
+        questionData.explanation
       );
     } else {
       return new Response("Invalid question type", { status: 400 });
     }
 
-    // In a complete implementation, we would store the attempt in a student_answers table
+    // Find or create a practice session for this module and level
+    const existingAttempt = await db
+      .select()
+      .from(studentTestAttempts)
+      .where(and(
+        eq(studentTestAttempts.studentId, session.user.id),
+        eq(studentTestAttempts.moduleId, moduleId),
+        eq(studentTestAttempts.testType, "practice"),
+        eq(studentTestAttempts.level, questionData.level),
+        eq(studentTestAttempts.status, "in_progress")
+      ))
+      .orderBy(desc(studentTestAttempts.attemptDate))
+      .limit(1);
+
+    let attemptId;
+    if (existingAttempt.length > 0) {
+      attemptId = existingAttempt[0].id;
+    } else {
+      // Create a new practice attempt
+      const [newAttempt] = await db.insert(studentTestAttempts).values({
+        studentId: session.user.id,
+        moduleId,
+        testType: "practice",
+        level: questionData.level,
+        score: "0", // Will be updated later when we have a total
+        totalQuestions: "1", // Placeholder - will be updated as needed
+        correctAnswers: "0", // Placeholder - will be updated as needed
+        status: "in_progress"
+      }).returning({ id: studentTestAttempts.id });
+      
+      attemptId = newAttempt.id;
+    }
+
+    // Save the individual answer
+    await db.insert(studentAnswers).values({
+      attemptId,
+      questionId,
+      studentAnswer: submittedAnswer,
+      isCorrect: result.isCorrect ? "true" : "false",
+      score: result.score ? result.score.toString() : (result.isCorrect ? "1" : "0"),
+      feedback: result.feedback
+    });
+
     return new Response(JSON.stringify({ 
       success: true,
       isCorrect: result.isCorrect,

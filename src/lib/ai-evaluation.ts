@@ -1,24 +1,27 @@
 /**
- * Evaluates a short answer using the Ollama API with carefully engineered prompts
+ * Evaluates a short answer using the Ollama API with carefully engineered prompts for scoring only
+ * The feedback is provided separately from the database explanation field
  * @param question The question text
- * @param correctAnswer The correct answer for reference
- * @param studentAnswer The student's answer
- * @returns An object with correctness and feedback
+ * @param correctAnswer The correct answer for reference (used by AI for scoring)
+ * @param studentAnswer The student's answer (used by AI for scoring)
+ * @param explanation The explanation from the database (used as feedback)
+ * @returns An object with correctness, score (from AI) and feedback (from database)
  */
 export async function evaluateShortAnswer(
   question: string,
   correctAnswer: string | null,
-  studentAnswer: string
+  studentAnswer: string,
+  explanation: string | null
 ): Promise<{ isCorrect: boolean; score: number; feedback: string }> {
   try {
-    // Create a detailed prompt for the AI model with specific evaluation criteria
+    // Create a detailed prompt for the AI model to generate a score
     const prompt = `You are an educational assessment expert. Evaluate the student's response to the given question. Apply consistent, fair academic standards.
 
 INSTRUCTION:
 - Analyze the student's answer for accuracy, completeness, and relevance to the question
 - Compare against the correct answer for reference
-- Be constructive and educational in your feedback
-- Provide specific suggestions for improvement when appropriate
+- Focus on generating a numeric score between 0.0 and 1.0
+- The actual feedback will be provided separately from the question's explanation
 
 QUESTION: ${question}
 STUDENT ANSWER: ${studentAnswer}
@@ -27,8 +30,7 @@ CORRECT ANSWER: ${correctAnswer || "Not provided for reference"}
 Evaluate using this JSON format:
 {
   "isCorrect": true/false,
-  "score": number from 0.0 to 1.0 (where 1.0 = excellent, 0.0 = incorrect),
-  "feedback": "Detailed, constructive feedback for the student with specific points about their answer"
+  "score": number from 0.0 to 1.0 (where 1.0 = excellent, 0.0 = incorrect)
 }
 
 SCORING GUIDELINES:
@@ -36,13 +38,7 @@ SCORING GUIDELINES:
 - 0.7-0.8: Answer is mostly correct with minor omissions
 - 0.5-0.6: Answer shows basic understanding but has errors
 - 0.3-0.4: Answer shows limited understanding
-- 0.0-0.2: Answer is substantially incorrect or off-topic
-
-FEEDBACK TIPS:
-- Acknowledge what the student did well
-- Mention specific areas for improvement
-- Provide constructive guidance
-- Be encouraging but honest`;
+- 0.0-0.2: Answer is substantially incorrect or off-topic`;
 
     // Call the Ollama API
     const response = await fetch("http://localhost:11434/api/generate", {
@@ -67,7 +63,7 @@ FEEDBACK TIPS:
       return {
         isCorrect: false,
         score: 0,
-        feedback: "AI evaluation temporarily unavailable. Please review the material and try again.",
+        feedback: explanation || "AI evaluation temporarily unavailable. Please review the material and try again.",
       };
     }
 
@@ -85,25 +81,26 @@ FEEDBACK TIPS:
       return {
         isCorrect: false,
         score: 0,
-        feedback: "Unable to parse AI evaluation. Please review the material and try again.",
+        feedback: explanation || "Unable to parse AI evaluation. Please review the material and try again.",
       };
     }
     
     const jsonString = responseText.substring(jsonStart, jsonEnd);
     const evaluation = JSON.parse(jsonString);
     
+    // Return the AI-generated score but use the database explanation as feedback
     return {
       isCorrect: evaluation.isCorrect,
       score: evaluation.score,
-      feedback: evaluation.feedback,
+      feedback: explanation || "Please review the material.", // Use database explanation as feedback
     };
   } catch (error) {
     console.error("Error in AI evaluation:", error);
-    // Return a fallback result if AI evaluation fails
+    // Return a fallback result if AI evaluation fails, still using database explanation
     return {
       isCorrect: false,
       score: 0,
-      feedback: "AI evaluation temporarily unavailable. Please review the material and try again.",
+      feedback: explanation || "AI evaluation temporarily unavailable. Please review the material and try again.",
     };
   }
 }
@@ -112,11 +109,13 @@ FEEDBACK TIPS:
  * Evaluates an MCQ answer by checking for exact match or close match
  * @param correctAnswer The correct answer
  * @param studentAnswer The student's answer
+ * @param explanation The explanation from the database
  * @returns Whether the answer is correct and feedback
  */
 export function evaluateMCQAnswer(
   correctAnswer: string | null,
-  studentAnswer: string
+  studentAnswer: string,
+  explanation: string | null
 ): { isCorrect: boolean; feedback: string } {
   // Normalize answers for comparison (trim whitespace and convert to lowercase)
   const normalizedCorrect = correctAnswer?.toLowerCase().trim() || '';
@@ -128,10 +127,13 @@ export function evaluateMCQAnswer(
                    normalizedStudent.includes(normalizedCorrect) || // Check if student answer contains correct answer
                    normalizedCorrect.includes(normalizedStudent); // Check reverse match
 
+  // Use explanation from database as feedback, fallback to basic feedback if not available
+  const feedback = explanation || (isCorrect 
+    ? "Correct! Well done." 
+    : `Incorrect. The correct answer is: ${correctAnswer || 'N/A'}. Please review the material.`);
+
   return {
     isCorrect,
-    feedback: isCorrect 
-      ? "Correct! Well done." 
-      : `Incorrect. The correct answer is: ${correctAnswer || 'N/A'}. Please review the material.`
+    feedback
   };
 }
