@@ -19,11 +19,10 @@ export async function POST(req: NextRequest) {
     const body: ChatbotRequestBody = await req.json();
     const { question, moduleId, level, context, conversationHistory } = body;
 
-    // Fetch module content and questions to provide context to the AI
-    const content = await db
+    // Fetch essential module content with a single optimized query
+    const moduleData = await db
       .select({
         moduleIdentity: moduleContents.moduleIdentity,
-        introduction: moduleContents.introduction,
         learningObjectives: moduleContents.learningObjectives,
         materialExplanation: moduleContents.materialExplanation,
         summary: moduleContents.summary,
@@ -34,54 +33,23 @@ export async function POST(req: NextRequest) {
         eq(moduleContents.level, level)
       ));
 
-    const questions = await db
-      .select({
-        question: items.question,
-        answer: items.answer,
-        explanation: items.explanation,
-        questionType: items.questionType,
-      })
-      .from(items)
-      .where(and(
-        eq(items.moduleId, moduleId),
-        eq(items.level, level),
-        eq(items.type, "practice") // Include practice questions as context
-      ))
-      .limit(5); // Limit to avoid token issues
+    // Extract essential context information
+    const moduleContext = moduleData.length > 0 ? moduleData[0] : null;
 
-    // Create context for the AI
-    const moduleContext = content.length > 0 ? {
-      identity: content[0].moduleIdentity,
-      introduction: content[0].introduction,
-      objectives: content[0].learningObjectives,
-      explanation: content[0].materialExplanation,
-      summary: content[0].summary
-    } : null;
+    // Create a concise prompt for the Ollama API
+    const prompt = `You are an educational assistant for "${context}" at ${level} level.
 
-    const previousQuestions = questions.map(q => 
-      `Q: ${q.question}\nA: ${q.explanation || q.answer}`
-    ).join('\n\n');
+Module Summary: ${moduleContext ? `${moduleContext.moduleIdentity || ''} ${moduleContext.summary || ''}` : ''}
 
-    // Create a prompt for the Ollama API
-    const prompt = `You are an educational assistant helping a student learn about "${context}". 
-    The student is at the ${level} level. Use the following module content to answer their question.
+Learning Objectives: ${moduleContext?.learningObjectives?.slice(0, 3).join(', ') || 'N/A'}
 
-    Module Context:
-    ${moduleContext ? `Identity: ${moduleContext.identity || 'N/A'}
-    Introduction: ${moduleContext.introduction || 'N/A'}
-    Learning Objectives: ${moduleContext.objectives?.join(', ') || 'N/A'}
-    Material Explanation: ${moduleContext.explanation || 'N/A'}
-    Summary: ${moduleContext.summary || 'N/A'}` : 'No specific module content available'}
+Key Concepts: ${moduleContext?.materialExplanation?.substring(0, 500) || ''}
 
-    Example Questions and Answers:
-    ${previousQuestions || 'No example questions available'}
+Recent Conversation: ${conversationHistory.slice(-2).map(msg => `[${msg.role}]: ${msg.content}`).join(' | ') || 'N/A'}
 
-    Conversation History:
-    ${conversationHistory.slice(-4).map(msg => `[${msg.role.toUpperCase()}]: ${msg.content}`).join('\n')}  // Only last 4 messages for brevity
+Student Question: ${question}
 
-    Student Question: ${question}
-
-    Provide a helpful, educational response that addresses the student's question based on the available module content. Keep the response relevant to the learning objectives and level of the student. If you don't have specific information about the topic, acknowledge this and guide the student to focus on the provided content.`;
+Provide a concise, helpful response based on the module content. Keep it relevant to the learning objectives and student's level. If unsure, guide them to focus on the provided materials.`;
 
     // Call the Ollama API
     const response = await fetch("http://localhost:11434/api/generate", {

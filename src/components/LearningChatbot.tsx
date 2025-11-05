@@ -31,6 +31,7 @@ export default function LearningChatbot({ moduleId, level, moduleTitle }: Learni
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const assistantMessageRef = useRef<{ id: string; content: string } | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -68,7 +69,7 @@ export default function LearningChatbot({ moduleId, level, moduleTitle }: Learni
           moduleId,
           level,
           context: moduleTitle,
-          conversationHistory: messages
+          conversationHistory: messages.slice(-4) // Limit conversation history to last 4 messages
         }),
       });
 
@@ -78,15 +79,35 @@ export default function LearningChatbot({ moduleId, level, moduleTitle }: Learni
 
       const data = await response.json();
 
-      // Add AI response
+      // Create a "typing" effect for the assistant's response
+      const aiMessageId = (Date.now() + 1).toString();
       const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        content: data.response,
+        id: aiMessageId,
+        content: '',
         role: 'assistant',
         timestamp: new Date(),
       };
 
+      // Add the empty message first
       setMessages(prev => [...prev, aiMessage]);
+
+      // Simulate typing effect
+      const fullText = data.response;
+      let currentText = '';
+      
+      // Add characters one by one with delay to simulate typing
+      for (let i = 0; i < fullText.length; i++) {
+        await new Promise(resolve => setTimeout(resolve, 20)); // 20ms delay per character
+        currentText += fullText[i];
+        
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === aiMessageId 
+              ? { ...msg, content: currentText } 
+              : msg
+          )
+        );
+      }
     } catch (error) {
       console.error('Error getting chatbot response:', error);
       
@@ -138,12 +159,14 @@ export default function LearningChatbot({ moduleId, level, moduleTitle }: Learni
                     message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
                   }`}
                 >
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {typeof window !== 'undefined'
+                    ? message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : message.timestamp.toLocaleTimeString()}
                 </p>
               </div>
             </div>
           ))}
-          {isLoading && (
+          {isLoading && !messages.some(m => m.id.startsWith('temp-')) && (
             <div className="flex justify-start">
               <div className="bg-gray-100 text-gray-800 rounded-lg px-4 py-2 rounded-bl-none max-w-[80%]">
                 <p>Thinking...</p>
