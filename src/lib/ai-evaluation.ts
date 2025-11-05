@@ -1,5 +1,5 @@
 /**
- * Evaluates a short answer using the Ollama API with carefully engineered prompts for scoring only
+ * Evaluates a short answer using the Ollama API with a detailed 3-dimension rubric
  * The feedback is provided separately from the database explanation field
  * @param question The question text
  * @param correctAnswer The correct answer for reference (used by AI for scoring)
@@ -15,30 +15,48 @@ export async function evaluateShortAnswer(
 ): Promise<{ isCorrect: boolean; score: number; feedback: string }> {
   try {
     // Create a detailed prompt for the AI model to generate a score
-    const prompt = `You are an educational assessment expert. Evaluate the student's response to the given question. Apply consistent, fair academic standards.
+    const prompt = `You are an educational assessment expert. Evaluate the student's response to the given question using the provided detailed rubric. Apply consistent, fair academic standards.
 
 INSTRUCTION:
-- Analyze the student's answer for accuracy, completeness, and relevance to the question
-- Compare against the correct answer for reference
-- Focus on generating a numeric score between 0.0 and 1.0
-- The actual feedback will be provided separately from the question's explanation
+Read the QUESTION, STUDENT ANSWER, and (if present) the CORRECT ANSWER.
+Assign an integer score (0–4) for each rubric dimension: "analysis", "understanding of concepts", and "configuration_implementation".
+Be strict but fair; reward clear reasoning, correct concepts, and accurate/efficient procedures.
+If CORRECT ANSWER is not provided, judge against generally accepted domain knowledge and internal consistency with the QUESTION.
+
+RUBRIC:
+1) Analysis
+- 0: Unable to analyze at all.
+- 1: Fails to correctly recognize the problem.
+- 2: Recognizes symptoms only; lacks deeper analysis.
+- 3: Identifies the problem and proposes a solution, though not fully precise.
+- 4: Correctly identifies the problem, explains likely causes, and proposes relevant solutions.
+
+2) Understanding of Concepts
+- 0: No understanding.
+- 1: Recalls terms only, without meaning.
+- 2: Mentions basic concepts but explanations are thin or incomplete.
+- 3: Explains concepts correctly; limited integration across topics.
+- 4: Explains concepts clearly and connects across layers/topics.
+
+3) Configuration & Implementation
+- 0: No understanding of implementation.
+- 1: Unable to configure/implement correctly.
+- 2: Partially correct; many errors remain.
+- 3: Correct with minimal guidance.
+- 4: Correct, independent, and efficient configuration/implementation.
 
 QUESTION: ${question}
 STUDENT ANSWER: ${studentAnswer}
 CORRECT ANSWER: ${correctAnswer || "Not provided for reference"}
 
-Evaluate using this JSON format:
+Return ONLY this JSON (no extra text):
 {
-  "isCorrect": true/false,
-  "score": number from 0.0 to 1.0 (where 1.0 = excellent, 0.0 = incorrect)
-}
-
-SCORING GUIDELINES:
-- 0.9-1.0: Answer is fully correct and comprehensive
-- 0.7-0.8: Answer is mostly correct with minor omissions
-- 0.5-0.6: Answer shows basic understanding but has errors
-- 0.3-0.4: Answer shows limited understanding
-- 0.0-0.2: Answer is substantially incorrect or off-topic`;
+  "scores": {
+    "analysis": 0-4,
+    "understanding of concepts": 0-4,
+    "configuration_implementation": 0-4
+  }
+}`;
 
     // Call the Ollama API
     const response = await fetch("http://localhost:11434/api/generate", {
@@ -88,10 +106,21 @@ SCORING GUIDELINES:
     const jsonString = responseText.substring(jsonStart, jsonEnd);
     const evaluation = JSON.parse(jsonString);
     
-    // Return the AI-generated score but use the database explanation as feedback
+    // Calculate average score and determine correctness in JavaScript
+    const analysis = evaluation.scores.analysis;
+    const understandingConcepts = evaluation.scores["understanding of concepts"];
+    const configurationImplementation = evaluation.scores["configuration_implementation"];
+    
+    // Calculate average score: (sum of scores) / 12 (since max possible score is 4+4+4=12)
+    const average_score = (analysis + understandingConcepts + configurationImplementation) / 12;
+    
+    // Determine if correct based on threshold
+    const isCorrect = average_score >= 0.7;
+    
+    // Return the calculated score but use the database explanation as feedback
     return {
-      isCorrect: evaluation.isCorrect,
-      score: evaluation.score,
+      isCorrect,
+      score: average_score,
       feedback: explanation || "Please review the material.", // Use database explanation as feedback
     };
   } catch (error) {

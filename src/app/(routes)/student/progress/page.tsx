@@ -51,7 +51,7 @@ export default async function StudentProgressPage() {
                       {record.moduleDescription}
                     </CardDescription>
                   </div>
-                  <Badge variant={record.status === "completed" ? "default" : "secondary"}>
+                  <Badge variant={record.status === "passed" ? "default" : record.status === "completed" ? "secondary" : "outline"}>
                     {record.status}
                   </Badge>
                 </div>
@@ -71,7 +71,7 @@ export default async function StudentProgressPage() {
                 <div className="flex flex-col gap-2">
                   <Link href={`/student/modules/${record.moduleId}/content?level=${record.levelAssigned}`}>
                     <Button className="w-full">
-                      {record.status === "in_progress" ? "Continue Learning" : "Review Content"}
+                      {record.status === "in_progress" ? "Continue Learning" : record.status === "passed" ? "Review Results" : "Review Content"}
                     </Button>
                   </Link>
                   

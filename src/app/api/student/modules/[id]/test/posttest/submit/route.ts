@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { db } from "@/db";
 import { items } from "@/db/schema/modules";
+import { studentProgress } from "@/db/schema/studentProgress";
 import { studentTestAttempts, studentAnswers } from "@/db/schema/studentTestAttempts";
 import { eq, and } from "drizzle-orm";
 import { getServerSession } from "@/lib/auth/get-session";
@@ -111,8 +112,8 @@ export async function POST(
     // Calculate overall percentage
     const scorePercentage = totalAnswered > 0 ? totalScore / totalAnswered : 0;
     
-    // Determine pass/fail (50% threshold for passing)
-    const passed = scorePercentage >= 0.5;
+    // Determine pass/fail (70% threshold for passing as requested)
+    const passed = scorePercentage >= 0.7;
 
     // Save the test attempt to the database
     const [testAttempt] = await db.insert(studentTestAttempts).values({
@@ -137,6 +138,18 @@ export async function POST(
         feedback: result.feedback
       });
     }
+
+    // Update the student progress status based on posttest result
+    await db
+      .update(studentProgress)
+      .set({
+        status: passed ? "passed" : "completed",  // Set to "passed" if score >= 0.7, otherwise "completed"
+        endDate: new Date() // Set end date when posttest is completed
+      })
+      .where(and(
+        eq(studentProgress.studentId, session.user.id),
+        eq(studentProgress.moduleId, moduleId)
+      ));
 
     return new Response(JSON.stringify({ 
       passed,

@@ -71,7 +71,7 @@ export default async function StudentDashboard() {
                 <CardContent className="mt-auto">
                   <Link href={`/student/modules/${progress.moduleId}/content?level=${progress.levelAssigned}`}>
                     <Button className="w-full">
-                      {progress.status === "in_progress" ? "Continue Learning" : "Review Content"}
+                      {progress.status === "in_progress" ? "Continue Learning" : progress.status === "passed" ? "Review Results" : "Review Content"}
                     </Button>
                   </Link>
                 </CardContent>

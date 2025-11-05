@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { user } from "@/db/schema/auth/user";
 import { studentProgress } from "@/db/schema/studentProgress";
 import { modules } from "@/db/schema/modules";
+import { studentTestAttempts } from "@/db/schema/studentTestAttempts";
 import { eq, and, not, desc } from "drizzle-orm";
 import { getServerSession } from "@/lib/auth/get-session";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +26,7 @@ export default async function InstructorStudents() {
     .from(user)
     .where(not(eq(user.role, "instructor")));
 
-  // Fetch student progress data
+  // Fetch student progress data with posttest scores
   const studentProgressData = await db
     .select({
       studentId: studentProgress.studentId,
@@ -35,10 +36,16 @@ export default async function InstructorStudents() {
       levelAssigned: studentProgress.levelAssigned,
       status: studentProgress.status,
       startDate: studentProgress.startDate,
+      posttestScore: studentTestAttempts.score,
     })
     .from(studentProgress)
     .innerJoin(user, eq(studentProgress.studentId, user.id))
     .innerJoin(modules, eq(studentProgress.moduleId, modules.id))
+    .leftJoin(studentTestAttempts, and(
+      eq(studentProgress.studentId, studentTestAttempts.studentId),
+      eq(studentProgress.moduleId, studentTestAttempts.moduleId),
+      eq(studentTestAttempts.testType, "posttest")
+    ))
     .orderBy(desc(studentProgress.startDate))
     .limit(10); // Get recent progress from all students
 
@@ -100,7 +107,14 @@ export default async function InstructorStudents() {
                           <span className="text-xs px-2 py-1 bg-blue-100 text-blue-800 rounded-full capitalize">
                             {progress.levelAssigned}
                           </span>
-                          <p className="text-xs text-gray-500 mt-1">{progress.status}</p>
+                          <p className="text-xs text-gray-500 mt-1 capitalize">{progress.status}</p>
+                          {progress.posttestScore !== null ? (
+                            <p className="text-xs font-medium mt-1">
+                              Score: {(parseFloat(progress.posttestScore) * 100).toFixed(1)}%
+                            </p>
+                          ) : (
+                            <p className="text-xs text-gray-400 mt-1">No posttest</p>
+                          )}
                         </div>
                       </div>
                       <p className="text-xs text-gray-500 mt-2">Started: {progress.startDate?.toLocaleDateString()}</p>
