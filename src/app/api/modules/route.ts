@@ -5,6 +5,12 @@ import { eq, and, InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { getServerSession } from "@/lib/auth/get-session";
 import { z } from "zod";
 
+// Question count configuration - easily adjustable for instructors
+const QUESTIONS_PER_TYPE = {
+  MCQ: 5,     // Number of MCQ questions per test type
+  SHORT: 5,   // Number of short answer questions per test type
+} as const;
+
 type ModuleInsertType = InferInsertModel<typeof modules>;
 type ModuleSelectType = InferSelectModel<typeof modules>;
 type ModuleContentType = InferInsertModel<typeof moduleContents>;
@@ -161,42 +167,35 @@ async function generateAIContent(content: string, title: string, level: string):
     const prompt = `
 You are an API that returns ONLY strict JSON (RFC 8259).
 
-Hard rules you MUST follow:
-- Output a single JSON object only. No explanations, no markdown/code fences, no backticks, no comments.
-- Use double quotes for ALL keys and ALL string values.
-- Do NOT include trailing commas.
-- Do NOT add or rename fields outside the schema below.
-- For "questionType":"short", set "options" to null (not an array).
-- Escape any double quotes inside strings with \\" and replace literal newlines inside strings with \\n.
-
-Task:
 Generate comprehensive educational content for module "${title}" at ${level.toUpperCase()} level based on this content:
 """${content}"""
 
 Generate content with appropriate depth and complexity for ${level} level.
 
-Return EXACTLY this JSON shape:
+Generate exactly ${QUESTIONS_PER_TYPE.MCQ} MCQ and ${QUESTIONS_PER_TYPE.SHORT} short-answer questions for each test type (pretest, practice, posttest).
+
+Return EXACTLY this JSON with no additional text:
 
 {
   "content": {
-    "Module Identity": "Define the key identity of the module",
-    "Introduction": "Provide an engaging introduction to the topic",
+    "Module Identity": "Module identity",
+    "Introduction": "Introduction to the topic",
     "Learning Objectives": [
       "Learning objective 1",
       "Learning objective 2",
       "Learning objective 3"
     ],
-    "Material Explanation / Brief Theory": "Detailed explanation of concepts appropriate for ${level} level",
-    "Summary (Temporary Conclusion)": "Concise summary wrapping up the key points"
+    "Material Explanation / Brief Theory": "Explanation appropriate for ${level} level",
+    "Summary (Temporary Conclusion)": "Summary of key points"
   },
   "questions": [
     {
       "questionType": "mcq" | "short",
       "type": "pretest" | "practice" | "posttest",
-      "question": "Question text appropriate for ${level} level",
+      "question": "Question appropriate for ${level} level",
       "options": ["option1", "option2", "option3", "option4"] | null,
       "answer": "Correct answer",
-      "explanation": "Reason why the answer is correct"
+      "explanation": "Explanation"
     }
   ]
 }
