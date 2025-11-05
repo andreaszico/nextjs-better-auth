@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import InteractivePractice from "@/components/InteractivePractice";
+import LearningChatbot from "@/components/LearningChatbot";
 
 interface Props {
   params: Promise<{
@@ -92,7 +93,7 @@ export default async function ModuleContent(props: Props) {
   const content = contentResult[0];
 
   return (
-    <div className="max-w-4xl mx-auto py-8">
+    <div className="max-w-7xl mx-auto py-8">
       <div className="mb-6">
         <Link href="/student">
           <Button variant="outline" className="mb-4">← Back to Dashboard</Button>
@@ -109,81 +110,95 @@ export default async function ModuleContent(props: Props) {
         </div>
       </div>
 
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Learning Content</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {content.moduleIdentity && (
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Module Identity</h3>
-                <p className="text-gray-700">{content.moduleIdentity}</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle>Learning Content</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {content.moduleIdentity && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Module Identity</h3>
+                    <p className="text-gray-700">{content.moduleIdentity}</p>
+                  </div>
+                )}
+                
+                {content.introduction && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Introduction</h3>
+                    <p className="text-gray-700">{content.introduction}</p>
+                  </div>
+                )}
+                
+                {content.learningObjectives && content.learningObjectives.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Learning Objectives</h3>
+                    <ul className="list-disc pl-5 space-y-1 text-gray-700">
+                      {content.learningObjectives.map((objective, i) => (
+                        <li key={i}>{objective}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {content.materialExplanation && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Material Explanation</h3>
+                    <p className="text-gray-700 whitespace-pre-line">{content.materialExplanation}</p>
+                  </div>
+                )}
+                
+                {content.summary && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Summary</h3>
+                    <p className="text-gray-700">{content.summary}</p>
+                  </div>
+                )}
               </div>
-            )}
-            
-            {content.introduction && (
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Introduction</h3>
-                <p className="text-gray-700">{content.introduction}</p>
-              </div>
-            )}
-            
-            {content.learningObjectives && content.learningObjectives.length > 0 && (
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Learning Objectives</h3>
-                <ul className="list-disc pl-5 space-y-1 text-gray-700">
-                  {content.learningObjectives.map((objective, i) => (
-                    <li key={i}>{objective}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            
-            {content.materialExplanation && (
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Material Explanation</h3>
-                <p className="text-gray-700 whitespace-pre-line">{content.materialExplanation}</p>
-              </div>
-            )}
-            
-            {content.summary && (
-              <div>
-                <h3 className="text-lg font-semibold mb-2">Summary</h3>
-                <p className="text-gray-700">{content.summary}</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
 
-      {practiceQuestions.length > 0 && (
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Practice Questions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <InteractivePractice 
-              questions={practiceQuestions} 
-              moduleId={moduleId} 
-              level={level} 
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div className="flex gap-2">
-          <Link href={`/student/modules/${moduleId}/pretest`}>
-            <Button variant="outline">Retake Pretest</Button>
-          </Link>
-          <Link href={`/student/modules/${moduleId}/test?type=posttest&level=${level}`}>
-            <Button variant="secondary">Take Post-test</Button>
-          </Link>
+          {practiceQuestions.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Practice Questions</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <InteractivePractice 
+                  questions={practiceQuestions} 
+                  moduleId={moduleId} 
+                  level={level} 
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
-        <Link href="/student">
-          <Button>Back to Dashboard</Button>
-        </Link>
+
+        <div>
+          <LearningChatbot 
+            moduleId={moduleId} 
+            level={level} 
+            moduleTitle={moduleResult[0].title} 
+          />
+          
+          <div className="mt-8">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+              <div className="flex gap-2">
+                <Link href={`/student/modules/${moduleId}/pretest`}>
+                  <Button variant="outline">Retake Pretest</Button>
+                </Link>
+                <Link href={`/student/modules/${moduleId}/test?type=posttest&level=${level}`}>
+                  <Button variant="secondary">Take Post-test</Button>
+                </Link>
+              </div>
+              <Link href="/student">
+                <Button>Back to Dashboard</Button>
+              </Link>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
