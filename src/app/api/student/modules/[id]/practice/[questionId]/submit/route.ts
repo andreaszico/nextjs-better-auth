@@ -96,6 +96,32 @@ export async function POST(req: NextRequest) {
       feedback: result.feedback
     });
 
+    // Calculate the average score for this practice session
+    const sessionAnswers = await db
+      .select({
+        score: studentAnswers.score,
+        isCorrect: studentAnswers.isCorrect
+      })
+      .from(studentAnswers)
+      .where(eq(studentAnswers.attemptId, attemptId));
+    
+    let totalScore = 0;
+    for (const answer of sessionAnswers) {
+      totalScore += parseFloat(answer.score) || (answer.isCorrect === "true" ? 1 : 0);
+    }
+    
+    const averageScore = sessionAnswers.length > 0 ? totalScore / sessionAnswers.length : 0;
+
+    // Update the practice attempt with the new average score
+    await db
+      .update(studentTestAttempts)
+      .set({
+        score: averageScore.toString(),
+        totalQuestions: sessionAnswers.length.toString(),
+        correctAnswers: sessionAnswers.filter(a => a.isCorrect === "true").length.toString()
+      })
+      .where(eq(studentTestAttempts.id, attemptId));
+
     return new Response(JSON.stringify({ 
       success: true,
       isCorrect: result.isCorrect,

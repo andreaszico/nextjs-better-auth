@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
+import InteractivePractice from "@/components/InteractivePractice";
 
 interface Props {
   params: Promise<{
@@ -162,32 +163,11 @@ export default async function ModuleContent(props: Props) {
             <CardTitle>Practice Questions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-8">
-              {practiceQuestions.map((question, index) => (
-                <div key={question.id} className="border rounded-lg p-4" id={`question-${question.id}`}>
-                  <div className="flex items-start gap-3 mb-3">
-                    <span className="font-medium bg-blue-100 rounded-full w-8 h-8 flex items-center justify-center flex-shrink-0">
-                      {index + 1}
-                    </span>
-                    <h3 className="font-medium text-lg flex-1">{question.question}</h3>
-                  </div>
-                  
-                  <div className="mb-4">
-                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
-                      <p><span className="font-medium">Explanation:</span> {question.explanation}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-              <h3 className="text-lg font-semibold mb-2 text-blue-800">Interactive Practice Coming Soon</h3>
-              <p className="text-blue-700">
-                The interactive practice system with AI feedback is being prepared. 
-                For now, please review the explanations provided for each question.
-              </p>
-            </div>
+            <InteractivePractice 
+              questions={practiceQuestions} 
+              moduleId={moduleId} 
+              level={level} 
+            />
           </CardContent>
         </Card>
       )}
